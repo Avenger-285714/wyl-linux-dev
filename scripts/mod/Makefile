@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 CFLAGS_REMOVE_empty.o += $(CC_FLAGS_LTO)
+CFLAGS_REMOVE_empty.o += $(CC_FLAGS_LTO_GCC)
 
 hostprogs-always-y	+= modpost mk_elfconfig
 always-y		+= empty.o
@@ -7,6 +8,8 @@ always-y		+= empty.o
 modpost-objs	:= modpost.o file2alias.o sumversion.o symsearch.o
 
 devicetable-offsets-file := devicetable-offsets.h
+
+$(obj)/devicetable-offsets.s: KBUILD_CFLAGS += $(DISABLE_LTO_GCC)
 
 $(obj)/$(devicetable-offsets-file): $(obj)/devicetable-offsets.s FORCE
 	$(call filechk,offsets,__DEVICETABLE_OFFSETS_H__)
