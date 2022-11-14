@@ -350,7 +350,7 @@ extern struct apic *apic;
  * of different apic driver files in the Makefile.
  */
 #define apic_driver(sym)					\
-	static const struct apic *__apicdrivers_##sym __used		\
+	static const struct apic *__apicdrivers_##sym __used __noreorder		\
 	__aligned(sizeof(struct apic *))			\
 	__section(".apicdrivers") = { &sym }
 
