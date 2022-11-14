@@ -77,7 +77,7 @@ static void native_tlb_remove_table(struct mmu_gather *tlb, void *table)
 struct static_key paravirt_steal_enabled;
 struct static_key paravirt_steal_rq_enabled;
 
-static u64 native_steal_clock(int cpu)
+__visible_on_lto u64 native_steal_clock(int cpu)
 {
 	return 0;
 }
