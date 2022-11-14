@@ -266,7 +266,7 @@ extern struct module __this_module;
 	static_assert(__same_type(initcall_t, &fn));
 #else
 #define ____define_initcall(fn, __unused, __name, __sec)	\
-	static initcall_t __name __used 			\
+	static initcall_t __name __used __noreorder 		\
 		__attribute__((__section__(__sec))) = fn;
 #endif
 
