@@ -23,6 +23,8 @@ Kernel Build System
     llvm
     gendwarfksyms
 
+    lto-build
+
 .. only::  subproject and html
 
    Indices

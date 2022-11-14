@@ -47,9 +47,9 @@ objtool-args = $(vmlinux-objtool-args-y) --link
 
 vmlinux-o-ld-args-$(CONFIG_BUILTIN_MODULE_RANGES)	+= -Map=$@.map
 
-quiet_cmd_ld_vmlinux.o = LD      $@
+quiet_cmd_ld_vmlinux.o = LDFINAL $@
       cmd_ld_vmlinux.o = \
-	$(LD) ${KBUILD_LDFLAGS} -r -o $@ \
+	$(LDFINAL) ${KBUILD_LDFLAGS} -r -o $@ \
 	$(vmlinux-o-ld-args-y) \
 	$(addprefix -T , $(initcalls-lds)) \
 	--whole-archive vmlinux.a --no-whole-archive \
