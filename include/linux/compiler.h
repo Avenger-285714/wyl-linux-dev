@@ -115,6 +115,12 @@ void ftrace_likely_update(struct ftrace_likely_data *f, int val,
 #define __annotate_jump_table
 #endif /* CONFIG_OBJTOOL */
 
+#ifdef CONFIG_LTO_GCC
+# define __visible_on_lto		__visible
+#else
+# define __visible_on_lto		static
+#endif
+
 /*
  * Mark a position in code as unreachable.  This can be used to
  * suppress control flow warnings after asm blocks that transfer
