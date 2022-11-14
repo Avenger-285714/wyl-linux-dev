@@ -1596,11 +1596,12 @@ int alternatives_text_reserved(void *start, void *end)
  * convention such that we can 'call' it from assembly.
  */
 
-extern void int3_magic(unsigned int *ptr); /* defined in asm */
+extern __visible void int3_magic(unsigned int *ptr); /* defined in asm */
 
 asm (
 "	.pushsection	.init.text, \"ax\", @progbits\n"
 "	.type		int3_magic, @function\n"
+"	.globl		int3_magic\n"
 "int3_magic:\n"
 	ANNOTATE_NOENDBR
 "	movl	$1, (%" _ASM_ARG1 ")\n"
@@ -1609,7 +1610,7 @@ asm (
 "	.popsection\n"
 );
 
-extern void int3_selftest_ip(void); /* defined in asm below */
+extern __visible void int3_selftest_ip(void); /* defined in asm below */
 
 static int __init
 int3_exception_notify(struct notifier_block *self, unsigned long val, void *data)
