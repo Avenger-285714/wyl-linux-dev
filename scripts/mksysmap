@@ -19,6 +19,7 @@
 # N: debugging symbols
 # U: undefined global symbols
 # w: local weak symbols
+# W: weak symbols if they contain .c.
 / [aNUw] /d
 
 # ---------------------------------------------------------------------------
