@@ -1003,7 +1003,7 @@ CC_FLAGS_LTO	+= -fvisibility=hidden
 KBUILD_LDFLAGS += -mllvm -import-instr-limit=5
 endif
 
-ifdef CONFIG_LTO
+ifdef CONFIG_LTO_CLANG
 KBUILD_CFLAGS	+= -fno-lto $(CC_FLAGS_LTO)
 KBUILD_AFLAGS	+= -fno-lto
 export CC_FLAGS_LTO
