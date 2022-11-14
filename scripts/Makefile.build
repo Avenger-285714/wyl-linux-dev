@@ -204,7 +204,7 @@ endif
 
 # Built-in and composite module parts
 $(obj)/%.o: $(obj)/%.c $(recordmcount_source) FORCE
-	$(call if_changed_rule,cc_o_c)
+	+$(call if_changed_rule,cc_o_c)
 	$(call cmd,force_checksrc)
 
 # To make this rule robust against "Argument list too long" error,
@@ -409,7 +409,7 @@ endef
 $(multi-obj-m): private objtool-enabled := $(delay-objtool)
 $(multi-obj-m): private part-of-module := y
 $(multi-obj-m): %.o: %.mod FORCE
-	$(call if_changed_rule,ld_multi_m)
+	+$(call if_changed_rule,ld_multi_m)
 $(call multi_depend, $(multi-obj-m), .o, -objs -y -m)
 
 # Add intermediate targets:
