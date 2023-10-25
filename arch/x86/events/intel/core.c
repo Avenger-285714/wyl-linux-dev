@@ -5651,6 +5651,12 @@ static struct attribute *lbr_attrs[] = {
 	NULL
 };
 
+static umode_t
+lbr_is_visible(struct kobject *kobj, struct attribute *attr, int i)
+{
+	return x86_pmu.lbr_nr ? attr->mode : 0;
+}
+
 static char pmu_name_str[30];
 
 static ssize_t pmu_name_show(struct device *cdev,
@@ -5696,12 +5702,6 @@ mem_is_visible(struct kobject *kobj, struct attribute *attr, int i)
 		return x86_pmu.flags & PMU_FL_MEM_LOADS_AUX ? attr->mode : 0;
 
 	return pebs_is_visible(kobj, attr, i);
-}
-
-static umode_t
-lbr_is_visible(struct kobject *kobj, struct attribute *attr, int i)
-{
-	return x86_pmu.lbr_nr ? attr->mode : 0;
 }
 
 static umode_t
