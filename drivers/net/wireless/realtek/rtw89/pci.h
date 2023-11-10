@@ -1038,6 +1038,7 @@ struct rtw89_pci_bd_ram {
 
 struct rtw89_pci_gen_def {
 	int (*mac_pre_init)(struct rtw89_dev *rtwdev);
+	int (*mac_pre_deinit)(struct rtw89_dev *rtwdev);
 	int (*mac_post_init)(struct rtw89_dev *rtwdev);
 
 	void (*clr_idx_all)(struct rtw89_dev *rtwdev);
