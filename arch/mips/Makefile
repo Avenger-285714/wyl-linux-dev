@@ -284,6 +284,7 @@ entry-y				= $(shell $(objtree)/arch/mips/tools/elf-entry vmlinux)
 cflags-y			+= -I$(srctree)/arch/mips/include/asm/mach-generic
 drivers-$(CONFIG_PCI)		+= arch/mips/pci/
 
+ifdef need-compiler
 #
 # Automatically detect whether to build a 64-bit kernel using symbols
 # limited to 32-bit values, which produces more compact code.  This
@@ -308,7 +309,8 @@ ifdef need-compiler
       endif
     endif
   endif
-endif
+endif # CONFIG_64BIT
+endif # need-compiler
 
 # When linking a 32-bit executable the LLVM linker cannot cope with a
 # 32-bit load address that has been sign-extended to 64 bits.  Simply
