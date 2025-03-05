@@ -1875,6 +1875,10 @@ void xhci_mem_cleanup(struct xhci_hcd *xhci)
 	}
 	xhci_dbg_trace(xhci, trace_xhci_dbg_init, "Freed interrupters");
 
+	if (xhci->get_bw_command)
+		xhci_free_command(xhci, xhci->get_bw_command);
+	xhci->get_bw_command = NULL;
+
 	if (xhci->cmd_ring)
 		xhci_ring_free(xhci, xhci->cmd_ring);
 	xhci->cmd_ring = NULL;
@@ -2489,6 +2493,13 @@ int xhci_mem_init(struct xhci_hcd *xhci, gfp_t flags)
 	 * Since the USB core grabs the shared usb_bus bandwidth mutex before
 	 * disabling LPM, we only need to reserve one TRB for all devices.
 	 */
+	xhci->cmd_ring_reserved_trbs++;
+
+	xhci->get_bw_command = xhci_alloc_command_with_ctx(xhci, true, flags);
+	if (!xhci->get_bw_command)
+		goto fail;
+
+	/* Reserve one command ring trb for get roothub port bandwidth*/
 	xhci->cmd_ring_reserved_trbs++;
 
 	val = readl(&xhci->cap_regs->db_off);
