@@ -26334,6 +26334,16 @@ F:	drivers/hwtracing/stm/
 F:	include/linux/stm.h
 F:	include/uapi/linux/stm.h
 
+SYSTEMBASE MULTI-2/PCI DRIVER
+M:	Huacai Chen <chenhuacai@kernel.org>
+R:	Kexy Biscuit <kexybiscuit@aosc.io>
+R:	Mingcong Bai <jeffbai@aosc.io>
+R:	WangYuli <wangyuli@uniontech.com>
+L:	linux-kernel@vger.kernel.org
+L:	linux-serial@vger.kernel.org
+S:	Maintained
+F:	drivers/tty/serial/sb105x
+
 SYSTEM76 ACPI DRIVER
 M:	Jeremy Soller <jeremy@system76.com>
 M:	System76 Product Development <productdev@system76.com>
