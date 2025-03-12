@@ -72,6 +72,7 @@ obj-$(CONFIG_SERIAL_RP2)		+= rp2.o
 obj-$(CONFIG_SERIAL_RSCI)		+= rsci.o
 obj-$(CONFIG_SERIAL_SA1100)		+= sa1100.o
 obj-$(CONFIG_SERIAL_SAMSUNG)		+= samsung_tty.o
+obj-$(CONFIG_SERIAL_SB105X)		+= sb105x/
 obj-$(CONFIG_SERIAL_SB1250_DUART)	+= sb1250-duart.o
 obj-$(CONFIG_SERIAL_SCCNXP)		+= sccnxp.o
 obj-$(CONFIG_SERIAL_SC16IS7XX)		+= sc16is7xx.o
