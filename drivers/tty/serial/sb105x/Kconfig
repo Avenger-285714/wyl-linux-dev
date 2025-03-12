@@ -1,0 +1,15 @@
+config SERIAL_SB105X
+	tristate "SystemBase PCI Multiport UART"
+	select SERIAL_CORE
+	depends on HAS_IOPORT && PCI && TTY
+	depends on MIPS || X86 || COMPILE_TEST
+	help
+	  A driver for the SystemBase Multi-2/PCI serial card.
+
+	  It could potentially be used on some device models based
+	  on Loongson 3A4000 or 3B4000.
+
+	  To compile this driver a module, choose M here: the module
+	  will be called "sb105x".
+
+	  If unsure, say N.

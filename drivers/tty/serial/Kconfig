@@ -1615,3 +1615,5 @@ endmenu
 
 config SERIAL_MCTRL_GPIO
 	tristate
+
+source "drivers/tty/serial/sb105x/Kconfig"
