@@ -415,18 +415,36 @@ static int vsc_identify_csi_image(struct vsc_fw_loader *fw_loader)
 			{ VSC_IMG_CSI_EM7D_FRAG, VSC_IMG_CSI_EM7D_TYPE },
 		};
 		struct vsc_img_frag *frag;
+		u32 current_image_size;
 
+		/* Check if sign header fits within image bounds */
 		if ((u8 *)sign + sizeof(*sign) > image->data + image->size) {
+			dev_err(fw_loader->dev,
+				"Fragment %d sign header exceeds image bounds\n", i);
 			ret = -EINVAL;
 			goto err_release_image;
 		}
 
 		if (le32_to_cpu(sign->magic) != VSC_MAGIC_FW) {
+			dev_err(fw_loader->dev,
+				"Fragment %d invalid magic 0x%x\n", i,
+				le32_to_cpu(sign->magic));
+			ret = -EINVAL;
+			goto err_release_image;
+		}
+
+		current_image_size = le32_to_cpu(sign->image_size);
+		/* Check if complete fragment (header + image data) fits within image bounds */
+		if ((u8 *)sign + sizeof(*sign) + current_image_size > image->data + image->size) {
+			dev_err(fw_loader->dev,
+				"Fragment %d data (size %u) exceeds image bounds\n", i,
+				current_image_size);
 			ret = -EINVAL;
 			goto err_release_image;
 		}
 
 		if (!le32_to_cpu(img->image_location[i])) {
+			dev_err(fw_loader->dev, "Fragment %d has zero image location\n", i);
 			ret = -EINVAL;
 			goto err_release_image;
 		}
@@ -434,12 +452,12 @@ static int vsc_identify_csi_image(struct vsc_fw_loader *fw_loader)
 		frag = &fw_loader->frags[csi_image_map[i].frag_index];
 
 		frag->data = sign->image;
-		frag->size = le32_to_cpu(sign->image_size);
+		frag->size = current_image_size;
 		frag->location = le32_to_cpu(img->image_location[i]);
 		frag->type = csi_image_map[i].image_type;
 
 		sign = (struct vsc_fw_sign *)
-			(sign->image + le32_to_cpu(sign->image_size));
+			(sign->image + current_image_size);
 	}
 
 	fw_loader->csi = image;
@@ -496,13 +514,30 @@ static int vsc_identify_ace_image(struct vsc_fw_loader *fw_loader)
 		};
 		struct vsc_img_frag *frag, *last_frag;
 		u8 frag_index;
+		u32 current_image_size;
 
+		/* Check if sign header fits within image bounds */
 		if ((u8 *)sign + sizeof(*sign) > image->data + image->size) {
+			dev_err(fw_loader->dev,
+				"ACE fragment %d sign header exceeds image bounds\n", i);
 			ret = -EINVAL;
 			goto err_release_image;
 		}
 
 		if (le32_to_cpu(sign->magic) != VSC_MAGIC_FW) {
+			dev_err(fw_loader->dev,
+				"ACE fragment %d invalid magic 0x%x\n", i,
+				le32_to_cpu(sign->magic));
+			ret = -EINVAL;
+			goto err_release_image;
+		}
+
+		current_image_size = le32_to_cpu(sign->image_size);
+		/* Check if complete fragment (header + image data) fits within image bounds */
+		if ((u8 *)sign + sizeof(*sign) + current_image_size > image->data + image->size) {
+			dev_err(fw_loader->dev,
+				"ACE fragment %d data (size %u) exceeds image bounds\n", i,
+				current_image_size);
 			ret = -EINVAL;
 			goto err_release_image;
 		}
@@ -511,18 +546,28 @@ static int vsc_identify_ace_image(struct vsc_fw_loader *fw_loader)
 		frag = &fw_loader->frags[frag_index];
 
 		frag->data = sign->image;
-		frag->size = le32_to_cpu(sign->image_size);
+		frag->size = current_image_size;
 		frag->location = le32_to_cpu(img->image_location[i]);
 		frag->type = ace_image_map[i].image_type;
 
 		if (!frag->location) {
+			if (frag_index == 0) {
+				dev_err(fw_loader->dev, "Cannot auto-allocate address for first fragment\n");
+				ret = -EINVAL;
+				goto err_release_image;
+			}
 			last_frag = &fw_loader->frags[frag_index - 1];
+			if (!last_frag->location || !last_frag->size) {
+				dev_err(fw_loader->dev, "Previous fragment not properly initialized for auto-allocation\n");
+				ret = -EINVAL;
+				goto err_release_image;
+			}
 			frag->location =
 				ALIGN(last_frag->location + last_frag->size, SZ_4K);
 		}
 
 		sign = (struct vsc_fw_sign *)
-			(sign->image + le32_to_cpu(sign->image_size));
+			(sign->image + current_image_size);
 	}
 
 	fw_loader->ace = image;
