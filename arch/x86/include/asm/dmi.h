@@ -10,7 +10,7 @@
 
 static __always_inline __init void *dmi_alloc(unsigned len)
 {
-	return extend_brk(len, sizeof(int));
+	return extend_brk(len, sizeof(void *));
 }
 
 /* Use early IO mappings for DMI because it's initialized early */
