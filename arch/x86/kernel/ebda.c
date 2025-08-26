@@ -2,6 +2,7 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/memblock.h>
+#include <linux/unaligned.h>
 
 #include <asm/setup.h>
 #include <asm/bios_ebda.h>
@@ -71,7 +72,7 @@ void __init reserve_bios_regions(void)
 	 * to bytes to get a first guess at where the BIOS
 	 * firmware area starts:
 	 */
-	bios_start = *(unsigned short *)__va(BIOS_RAM_SIZE_KB_PTR);
+	bios_start = get_unaligned((unsigned short *)__va(BIOS_RAM_SIZE_KB_PTR));
 	bios_start <<= 10;
 
 	/*
