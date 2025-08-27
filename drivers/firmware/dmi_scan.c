@@ -447,12 +447,12 @@ static void __init save_mem_devices(const struct dmi_header *dm, void *v)
 		pr_warn(FW_BUG "Too many DIMM entries in SMBIOS table\n");
 		return;
 	}
-	dmi_memdev[nr].handle = get_unaligned(&dm->handle);
+	dmi_memdev[nr].handle = get_unaligned_le16(&dm->handle);
 	dmi_memdev[nr].device = dmi_string(dm, d[0x10]);
 	dmi_memdev[nr].bank = dmi_string(dm, d[0x11]);
 	dmi_memdev[nr].type = d[0x12];
 
-	size = get_unaligned((u16 *)&d[0xC]);
+	size = get_unaligned_le16(&d[0xC]);
 	if (size == 0)
 		bytes = 0;
 	else if (size == 0xffff)
@@ -462,7 +462,7 @@ static void __init save_mem_devices(const struct dmi_header *dm, void *v)
 	else if (size != 0x7fff || dm->length < 0x20)
 		bytes = (u64)size << 20;
 	else
-		bytes = (u64)get_unaligned((u32 *)&d[0x1C]) << 20;
+		bytes = (u64)get_unaligned_le32(&d[0x1C]) << 20;
 
 	if (bytes)
 		dmi_memdev_populated_nr++;
