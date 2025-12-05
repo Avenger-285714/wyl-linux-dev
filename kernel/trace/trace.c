@@ -5410,7 +5410,11 @@ tracing_read_pipe(struct file *filp, char __user *ubuf,
 	trace_seq_init(&iter->seq);
 
 	if (iter->trace->read) {
+		trace_event_read_lock();
+		trace_access_lock(iter->cpu_file);
 		sret = iter->trace->read(iter, filp, ubuf, cnt, ppos);
+		trace_access_unlock(iter->cpu_file);
+		trace_event_read_unlock();
 		if (sret)
 			return sret;
 	}
