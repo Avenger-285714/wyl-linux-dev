@@ -7,8 +7,15 @@
 #include <linux/highmem.h>
 #include <linux/dma-resv.h>
 #include <linux/module.h>
+#include <linux/uts.h>
 
+#if IS_ENABLED(CONFIG_X86)
 #include <asm/smp.h>
+#else
+#define wbinvd_on_all_cpus() \
+	WARN_ONCE(1, "i915: cache flush not implemented on %s in %s\n", \
+		  UTS_MACHINE, __func__)
+#endif
 
 #include "gem/i915_gem_dmabuf.h"
 #include "i915_drv.h"
