@@ -3,7 +3,9 @@
  * Copyright © 2020 Intel Corporation
  */
 
+#ifdef CONFIG_X86
 #include <asm/msr.h>
+#endif
 
 #include "i915_drv.h"
 #include "librapl.h"
@@ -19,6 +21,7 @@ bool librapl_supported(const struct drm_i915_private *i915)
 
 u64 librapl_energy_uJ(void)
 {
+#ifdef CONFIG_X86
 	unsigned long long power;
 	u32 units;
 
@@ -31,4 +34,8 @@ u64 librapl_energy_uJ(void)
 		return 0;
 
 	return (1000000 * power) >> units; /* convert to uJ */
+#else
+	/* MSR access not available on non-x86 platforms */
+	return 0;
+#endif
 }

@@ -16,6 +16,18 @@
 #include "i915_gem_object_frontbuffer.h"
 #include "i915_vma.h"
 
+/*
+ * Helper to check for clflush support across architectures.
+ * On x86, we check for X86_FEATURE_CLFLUSH.
+ * On other architectures, we assume cache flush is always available
+ * through architecture-specific mechanisms.
+ */
+#ifdef CONFIG_X86
+#define i915_has_clflush() static_cpu_has(X86_FEATURE_CLFLUSH)
+#else
+#define i915_has_clflush() true
+#endif
+
 static bool gpu_write_needs_clflush(struct drm_i915_gem_object *obj)
 {
 	struct drm_i915_private *i915 = to_i915(obj->base.dev);
@@ -681,7 +693,7 @@ int i915_gem_object_prepare_read(struct drm_i915_gem_object *obj,
 		return ret;
 
 	if (obj->cache_coherent & I915_BO_CACHE_COHERENT_FOR_READ ||
-	    !static_cpu_has(X86_FEATURE_CLFLUSH)) {
+	    !i915_has_clflush()) {
 		ret = i915_gem_object_set_to_cpu_domain(obj, false);
 		if (ret)
 			goto err_unpin;
@@ -732,7 +744,7 @@ int i915_gem_object_prepare_write(struct drm_i915_gem_object *obj,
 		return ret;
 
 	if (obj->cache_coherent & I915_BO_CACHE_COHERENT_FOR_WRITE ||
-	    !static_cpu_has(X86_FEATURE_CLFLUSH)) {
+	    !i915_has_clflush()) {
 		ret = i915_gem_object_set_to_cpu_domain(obj, true);
 		if (ret)
 			goto err_unpin;
