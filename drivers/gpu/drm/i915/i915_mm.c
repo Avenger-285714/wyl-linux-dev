@@ -114,7 +114,63 @@ int remap_io_mapping(struct vm_area_struct *vma,
 
 	return 0;
 }
-#endif
+
+#else /* !CONFIG_X86 */
+
+static int remap_pfn(pte_t *pte, unsigned long addr, void *data)
+{
+	struct remap_pfn *r = data;
+
+	/* Special PTE are not associated with any struct page */
+	set_pte_at(r->mm, addr, pte, pte_mkspecial(pfn_pte(r->pfn, r->prot)));
+	r->pfn++;
+
+	return 0;
+}
+
+/**
+ * remap_io_mapping - remap an IO mapping to userspace (non-x86 version)
+ * @vma: user vma to map to
+ * @addr: target user address to start at
+ * @pfn: physical address of kernel memory
+ * @size: size of map area
+ * @iomap: the source io_mapping
+ *
+ * Non-x86 version uses pgprot_writecombine() instead of direct
+ * _PAGE_CACHE_MASK manipulation for cache attribute handling.
+ *
+ * Note: this is only safe if the mm semaphore is held when called.
+ */
+int remap_io_mapping(struct vm_area_struct *vma,
+		     unsigned long addr, unsigned long pfn, unsigned long size,
+		     struct io_mapping *iomap)
+{
+	struct remap_pfn r;
+	int err;
+
+	GEM_BUG_ON((vma->vm_flags & EXPECTED_FLAGS) != EXPECTED_FLAGS);
+
+	/* We rely on prevalidation of the io-mapping to skip pfnmap tracking. */
+	r.mm = vma->vm_mm;
+	r.pfn = pfn;
+	/*
+	 * On non-x86 architectures, we cannot directly manipulate cache
+	 * attributes using _PAGE_CACHE_MASK. Instead, we use the io_mapping's
+	 * prot directly, which should already have appropriate cache settings.
+	 * If Write-Combining is needed, the io_mapping should be created with
+	 * pgprot_writecombine().
+	 */
+	r.prot = iomap->prot;
+
+	err = apply_to_page_range(r.mm, addr, size, remap_pfn, &r);
+	if (unlikely(err)) {
+		zap_vma_ptes(vma, addr, (r.pfn - pfn) << PAGE_SHIFT);
+		return err;
+	}
+
+	return 0;
+}
+#endif /* CONFIG_X86 */
 
 /**
  * remap_io_sg - remap an IO mapping to userspace
