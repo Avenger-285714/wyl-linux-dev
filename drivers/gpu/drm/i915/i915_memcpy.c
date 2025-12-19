@@ -24,10 +24,13 @@
 
 #include <linux/kernel.h>
 #include <linux/string.h>
-#include <linux/cpufeature.h>
 #include <linux/bug.h>
 #include <linux/build_bug.h>
+
+#ifdef CONFIG_X86
+#include <linux/cpufeature.h>
 #include <asm/fpu/api.h>
+#endif
 
 #include "i915_memcpy.h"
 
@@ -39,6 +42,7 @@
 
 static DEFINE_STATIC_KEY_FALSE(has_movntdqa);
 
+#ifdef CONFIG_X86
 static void __memcpy_ntdqa(void *dst, const void *src, unsigned long len)
 {
 	kernel_fpu_begin();
@@ -96,6 +100,21 @@ static void __memcpy_ntdqu(void *dst, const void *src, unsigned long len)
 
 	kernel_fpu_end();
 }
+#else /* !CONFIG_X86 */
+/*
+ * Fallback implementations for non-x86 architectures.
+ * These use regular memcpy without SSE4.1 non-temporal optimizations.
+ */
+static void __memcpy_ntdqa(void *dst, const void *src, unsigned long len)
+{
+	memcpy(dst, src, len << 4);
+}
+
+static void __memcpy_ntdqu(void *dst, const void *src, unsigned long len)
+{
+	memcpy(dst, src, len << 4);
+}
+#endif /* CONFIG_X86 */
 
 /**
  * i915_memcpy_from_wc: perform an accelerated *aligned* read from WC
@@ -162,6 +181,7 @@ void i915_unaligned_memcpy_from_wc(void *dst, const void *src, unsigned long len
 
 void i915_memcpy_init_early(struct drm_i915_private *dev_priv)
 {
+#ifdef CONFIG_X86
 	/*
 	 * Some hypervisors (e.g. KVM) don't support VEX-prefix instructions
 	 * emulation. So don't enable movntdqa in hypervisor guest.
@@ -169,4 +189,10 @@ void i915_memcpy_init_early(struct drm_i915_private *dev_priv)
 	if (static_cpu_has(X86_FEATURE_XMM4_1) &&
 	    !boot_cpu_has(X86_FEATURE_HYPERVISOR))
 		static_branch_enable(&has_movntdqa);
+#endif
+	/*
+	 * On non-x86 platforms, has_movntdqa remains false.
+	 * i915_memcpy_from_wc() will return false, causing callers
+	 * to fall back to regular memcpy.
+	 */
 }
