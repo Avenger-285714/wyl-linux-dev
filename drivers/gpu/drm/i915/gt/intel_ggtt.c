@@ -3,10 +3,18 @@
  * Copyright © 2020 Intel Corporation
  */
 
-#include <asm/set_memory.h>
-#include <asm/smp.h>
 #include <linux/types.h>
 #include <linux/stop_machine.h>
+#include <linux/uts.h>
+
+#if IS_ENABLED(CONFIG_X86)
+#include <asm/set_memory.h>
+#include <asm/smp.h>
+#else
+#define wbinvd_on_all_cpus() \
+	WARN_ONCE(1, "i915: cache flush not implemented on %s in %s\n", \
+		  UTS_MACHINE, __func__)
+#endif
 
 #include <drm/drm_managed.h>
 #include <drm/drm_print.h>
