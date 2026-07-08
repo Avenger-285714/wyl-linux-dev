@@ -1308,6 +1308,13 @@ found_sym:
 	return 0;
 }
 
+#ifndef ARCH_HAS_PAIRED_RELOCS
+static inline int arch_normalize_paired_reloc(struct elf *elf, struct reloc *reloc)
+{
+	return 0;
+}
+#endif
+
 /*
  * Sections with anonymous or uncorrelated data (strings, UBSAN data, Clang
  * anonymous constants) need section symbol references.
@@ -1331,6 +1338,11 @@ static int convert_reloc_sym(struct elf *elf, struct reloc *reloc)
 
 	if (reloc_type(reloc) == R_NONE)
 		return 1;
+
+	/* Fold paired ADD/SUB relocs (LoongArch) into a single PCREL */
+	ret = arch_normalize_paired_reloc(elf, reloc);
+	if (ret)
+		return ret;
 
 	ret = convert_reloc_local_label_to_secsym(elf, reloc);
 	if (ret)
