@@ -34,9 +34,29 @@ s64 arch_insn_adjusted_addend(struct instruction *insn, struct reloc *reloc)
 	return reloc_addend(reloc);
 }
 
+u64 arch_adjusted_addend(struct reloc *reloc)
+{
+	return reloc_addend(reloc);
+}
+
 bool arch_pc_relative_reloc(struct reloc *reloc)
 {
 	return false;
+}
+
+bool arch_absolute_reloc(struct elf *elf, struct reloc *reloc)
+{
+	switch (reloc_type(reloc)) {
+	case R_LARCH_32:
+	case R_LARCH_64:
+	case R_LARCH_ABS_HI20:
+	case R_LARCH_ABS_LO12:
+	case R_LARCH_ABS64_LO20:
+	case R_LARCH_ABS64_HI12:
+		return true;
+	default:
+		return false;
+	}
 }
 
 bool arch_callee_saved_reg(unsigned char reg)
