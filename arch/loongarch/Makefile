@@ -171,6 +171,18 @@ endif
 
 cflags-y += $(call cc-option, -mno-check-zero-division -fno-isolate-erroneous-paths-dereference)
 
+#
+# LoongArch objtool support is still maturing: GCC generates unreachable
+# code after some noreturn-style functions (machine_restart with while(true)
+# idle loops, machine_kexec with kexec_reboot, etc.) that objtool flags
+# as "unreachable instruction".  Suppress these warnings until the
+# annotations are upstream.
+#
+ifdef CONFIG_OBJTOOL
+objtool-args-y += --no-unreachable
+export objtool-args-y
+endif
+
 ifndef CONFIG_KASAN
 cflags-y += -fno-builtin-memcpy -fno-builtin-memmove -fno-builtin-memset
 endif
