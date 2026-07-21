@@ -86,7 +86,6 @@ struct symbol {
 	u8 profiling_func    : 1;
 	u8 warned	     : 1;
 	u8 embedded_insn     : 1;
-	u8 local_label       : 1;
 	u8 frame_pointer     : 1;
 	u8 ignore	     : 1;
 	u8 nocfi             : 1;
@@ -298,6 +297,40 @@ static inline bool is_weak_sym(struct symbol *sym)
 static inline bool is_local_sym(struct symbol *sym)
 {
 	return sym->bind == STB_LOCAL;
+}
+
+/*
+ * GAS paired-relocation anchor markers embedded in symbol names.
+ * \001 (SOH, ^A): regular local label anchors (e.g. L0^A)
+ * \002 (STX, ^B): dollar local label anchors  (e.g. .L1^B1)
+ */
+#define GAS_PAIRED_ANCHOR_SOH  ('\001')
+#define GAS_PAIRED_ANCHOR_STX  ('\002')
+
+/**
+ * is_local_label() - test if @sym is an assembler-local label
+ * @sym: symbol to test
+ *
+ * Assembler-local labels (.L* on most targets, L*^A/L*^B GAS
+ * paired-relocation anchors on some architectures) are NOTYPE
+ * LOCAL symbols that reference a position within a section.
+ * They are not present in kallsyms and must be normalized to
+ * their section symbol before relocation resolution in both
+ * the diff and checksum pipelines.
+ *
+ * GAS encodes anchor type with control characters in symbol
+ * names: GAS_PAIRED_ANCHOR_SOH (^A) for regular anchors,
+ * GAS_PAIRED_ANCHOR_STX (^B) for dollar-local anchors.
+ *
+ * Return: true if @sym is a local label, false otherwise.
+ */
+static inline bool is_local_label(struct symbol *sym)
+{
+	return is_local_sym(sym) && is_notype_sym(sym) && sym->sec &&
+	       (strstarts(sym->name, ".L") ||
+		(sym->name[0] == 'L' &&
+		 (strchr(sym->name, GAS_PAIRED_ANCHOR_SOH) ||
+		  strchr(sym->name, GAS_PAIRED_ANCHOR_STX))));
 }
 
 static inline bool is_alias_sym(struct symbol *sym)

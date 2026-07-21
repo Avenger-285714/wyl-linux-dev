@@ -13,6 +13,19 @@
 typedef void __noreturn (*kernel_entry_t)(bool efi, unsigned long cmdline,
 					  unsigned long systab);
 
+asmlinkage void __noreturn __attribute__((__noinline__)) efi_enter_kernel(unsigned long entrypoint,
+							unsigned long fdt_addr,
+							unsigned long fdt_size)
+{
+	asm volatile(
+		"move\t$t0, $a0\n\t"
+		"li.d\t$a0, 1\n\t"
+		"jirl\t$ra, $t0, 0\n\t"
+		"break\t1\n\t"
+		: : : "memory");
+	__builtin_unreachable();
+}
+
 efi_status_t check_platform_features(void)
 {
 	return EFI_SUCCESS;
@@ -68,7 +81,6 @@ unsigned long __weak kernel_entry_address(unsigned long kernel_addr,
 efi_status_t efi_boot_kernel(void *handle, efi_loaded_image_t *image,
 			     unsigned long kernel_addr, char *cmdline_ptr)
 {
-	kernel_entry_t real_kernel_entry;
 	struct exit_boot_struct priv;
 	unsigned long desc_size;
 	efi_status_t status;
@@ -98,8 +110,9 @@ efi_status_t efi_boot_kernel(void *handle, efi_loaded_image_t *image,
 	csr_write(CSR_DMW2_INIT, LOONGARCH_CSR_DMWIN2);
 	csr_write(CSR_DMW3_INIT, LOONGARCH_CSR_DMWIN3);
 
-	real_kernel_entry = (void *)kernel_entry_address(kernel_addr, image);
-
-	real_kernel_entry(true, (unsigned long)cmdline_ptr,
-			  (unsigned long)efi_system_table);
+	efi_enter_kernel(kernel_entry_address(kernel_addr, image),
+			 (unsigned long)cmdline_ptr,
+			 (unsigned long)efi_system_table);
+	asm volatile("break 1");
+	unreachable();
 }

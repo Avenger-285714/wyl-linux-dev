@@ -15,11 +15,35 @@
 #ifndef R_LARCH_64
 #define R_LARCH_64		2
 #endif
+#ifndef R_LARCH_ADD32
+#define R_LARCH_ADD32		50
+#endif
+#ifndef R_LARCH_ADD64
+#define R_LARCH_ADD64		51
+#endif
+#ifndef R_LARCH_SUB32
+#define R_LARCH_SUB32		55
+#endif
+#ifndef R_LARCH_SUB64
+#define R_LARCH_SUB64		56
+#endif
 #ifndef R_LARCH_32_PCREL
 #define R_LARCH_32_PCREL	99
 #endif
 #ifndef R_LARCH_64_PCREL
 #define R_LARCH_64_PCREL	109
+#endif
+#ifndef R_LARCH_ABS_HI20
+#define R_LARCH_ABS_HI20	67
+#endif
+#ifndef R_LARCH_ABS_LO12
+#define R_LARCH_ABS_LO12	68
+#endif
+#ifndef R_LARCH_ABS64_LO20
+#define R_LARCH_ABS64_LO20	69
+#endif
+#ifndef R_LARCH_ABS64_HI12
+#define R_LARCH_ABS64_HI12	70
 #endif
 
 #ifndef EM_LOONGARCH
@@ -33,5 +57,11 @@
 #define R_DATA64		R_LARCH_32_PCREL
 #define R_TEXT32		R_LARCH_32_PCREL
 #define R_TEXT64		R_LARCH_32_PCREL
+
+#define ARCH_HAS_PAIRED_RELOCS	1
+
+struct elf;
+struct reloc;
+int arch_normalize_paired_reloc(struct elf *elf, struct reloc *reloc);
 
 #endif /* _OBJTOOL_ARCH_ELF_H */

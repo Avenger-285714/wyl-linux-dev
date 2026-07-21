@@ -281,15 +281,9 @@ static bool is_uncorrelated_static_local(struct symbol *sym)
 	return false;
 }
 
-/*
- * .L symbols are assembler-local labels not present in kallsyms.  They must
- * never become KLP relocations; instead their data is cloned into the patch
- * module.  This covers .Ltmp* (Clang temp labels), .L__const.* (Clang local
- * constants), and any other assembler-local pattern.
- */
-static bool is_local_label(struct symbol *sym)
+static s64 reloc_target_offset(struct reloc *reloc)
 {
-	return strstarts(sym->name, ".L");
+	return (s64)reloc->sym->offset + reloc_addend(reloc);
 }
 
 static bool is_special_section(struct section *sec)
@@ -302,6 +296,7 @@ static bool is_special_section(struct section *sec)
 		"__ex_table",
 		"__jump_table",
 		"__mcount_loc",
+		"__patchable_function_entries",
 
 		/*
 		 * Extract .static_call_sites here to inherit non-module
@@ -1233,11 +1228,12 @@ static bool klp_reloc_needed(struct reloc *patched_reloc)
 	return true;
 }
 
-/* Return -1 error, 0 success, 1 skip */
+/* Return -1 error, 0 success */
 static int convert_reloc_sym_to_secsym(struct elf *elf, struct reloc *reloc)
 {
 	struct symbol *sym = reloc->sym;
 	struct section *sec = sym->sec;
+	s64 target;
 
 	if (is_sec_sym(sym))
 		return 0;
@@ -1245,10 +1241,22 @@ static int convert_reloc_sym_to_secsym(struct elf *elf, struct reloc *reloc)
 	if (!sec->sym && !elf_create_section_symbol(elf, sec))
 		return -1;
 
+	target = reloc_target_offset(reloc);
 	reloc->sym = sec->sym;
 	set_reloc_sym(elf, reloc, sec->sym->idx);
-	set_reloc_addend(elf, reloc, sym->offset + reloc_addend(reloc));
+	set_reloc_addend(elf, reloc, target);
 	return 0;
+}
+
+/* Return -1 error, 0 success */
+static int convert_reloc_local_label_to_secsym(struct elf *elf, struct reloc *reloc)
+{
+	struct symbol *sym = reloc->sym;
+
+	if (!is_local_label(sym))
+		return 0;
+
+	return convert_reloc_sym_to_secsym(elf, reloc);
 }
 
 /* Return -1 error, 0 success, 1 skip */
@@ -1300,6 +1308,13 @@ found_sym:
 	return 0;
 }
 
+#ifndef ARCH_HAS_PAIRED_RELOCS
+static inline int arch_normalize_paired_reloc(struct elf *elf, struct reloc *reloc)
+{
+	return 0;
+}
+#endif
+
 /*
  * Sections with anonymous or uncorrelated data (strings, UBSAN data, Clang
  * anonymous constants) need section symbol references.
@@ -1319,9 +1334,21 @@ static bool is_uncorrelated_section(struct section *sec)
 static int convert_reloc_sym(struct elf *elf, struct reloc *reloc)
 {
 	struct section *sec = reloc->sym->sec;
+	int ret;
 
 	if (reloc_type(reloc) == R_NONE)
 		return 1;
+
+	/* Fold paired ADD/SUB relocs (LoongArch) into a single PCREL */
+	ret = arch_normalize_paired_reloc(elf, reloc);
+	if (ret)
+		return ret;
+
+	ret = convert_reloc_local_label_to_secsym(elf, reloc);
+	if (ret)
+		return ret;
+
+	sec = reloc->sym->sec;
 
 	if (is_uncorrelated_section(sec))
 		return convert_reloc_sym_to_secsym(elf, reloc);
@@ -1610,6 +1637,24 @@ static int create_fake_symbol(struct elf *elf, struct section *sec,
 	return elf_create_symbol(elf, name, sec, STB_LOCAL, type, offset, size) ? 0 : -1;
 }
 
+struct data_special_entry {
+	struct section *target_sec;
+	unsigned long offset;
+};
+
+static int cmp_data_special_entry(const void *a, const void *b)
+{
+	const struct data_special_entry *ea = a, *eb = b;
+
+	if (ea->target_sec->idx != eb->target_sec->idx)
+		return ea->target_sec->idx < eb->target_sec->idx ? -1 : 1;
+	if (ea->offset < eb->offset)
+		return -1;
+	if (ea->offset > eb->offset)
+		return 1;
+	return 0;
+}
+
 /*
  * Special sections (alternatives, etc) are basically arrays of structs.
  * For all the special sections, create a symbol for each struct entry.  This
@@ -1655,31 +1700,73 @@ static int create_fake_symbols(struct elf *elf)
 	if (!sec || !sec->rsec)
 		goto entsize;
 
-	for_each_reloc(sec->rsec, reloc) {
-		unsigned long offset, size;
-		struct reloc *next_reloc;
+	/*
+	 * Collect all ANNOTYPE_DATA_SPECIAL relocations, sort them by
+	 * target section and offset, then compute entry sizes from
+	 * consecutive offsets.  Sorting avoids relying on relocation
+	 * table order, which is not guaranteed by any specification.
+	 */
+	{
+		struct data_special_entry *annots;
+		int i, nr_annots = 0;
 
-		if (annotype(elf, sec, reloc) != ANNOTYPE_DATA_SPECIAL)
-			continue;
-
-		offset = reloc_addend(reloc);
-
-		size = 0;
-		next_reloc = reloc;
-		for_each_reloc_continue(sec->rsec, next_reloc) {
-			if (annotype(elf, sec, next_reloc) != ANNOTYPE_DATA_SPECIAL ||
-			    next_reloc->sym->sec != reloc->sym->sec)
-				continue;
-
-			size = reloc_addend(next_reloc) - offset;
-			break;
+		for_each_reloc(sec->rsec, reloc) {
+			if (annotype(elf, sec, reloc) == ANNOTYPE_DATA_SPECIAL)
+				nr_annots++;
 		}
 
-		if (!size)
-			size = sec_size(reloc->sym->sec) - offset;
+		if (nr_annots) {
+			annots = calloc(nr_annots, sizeof(*annots));
+			if (!annots) {
+				ERROR_GLIBC("calloc");
+				return -1;
+			}
 
-		if (create_fake_symbol(elf, reloc->sym->sec, offset, size))
-			return -1;
+			i = 0;
+			for_each_reloc(sec->rsec, reloc) {
+				if (annotype(elf, sec, reloc) != ANNOTYPE_DATA_SPECIAL)
+					continue;
+				annots[i].target_sec = reloc->sym->sec;
+				annots[i].offset = reloc_target_offset(reloc);
+				i++;
+			}
+
+			qsort(annots, nr_annots, sizeof(*annots),
+			      cmp_data_special_entry);
+
+			for (i = 0; i < nr_annots; i++) {
+				unsigned long offset = annots[i].offset;
+				unsigned long size;
+
+				if (!annots[i].target_sec) {
+					ERROR("NULL target_sec in annotation %d", i);
+					free(annots);
+					return -1;
+				}
+
+				if (i + 1 < nr_annots &&
+				    annots[i + 1].target_sec == annots[i].target_sec) {
+					size = annots[i + 1].offset - offset;
+				} else {
+					if (offset >= sec_size(annots[i].target_sec)) {
+						ERROR("%s: offset 0x%lx >= size 0x%lx",
+						      annots[i].target_sec->name, offset,
+						      sec_size(annots[i].target_sec));
+						free(annots);
+						return -1;
+					}
+					size = sec_size(annots[i].target_sec) - offset;
+				}
+
+				if (create_fake_symbol(elf, annots[i].target_sec,
+						       offset, size)) {
+					free(annots);
+					return -1;
+				}
+			}
+
+			free(annots);
+		}
 	}
 
 	/*

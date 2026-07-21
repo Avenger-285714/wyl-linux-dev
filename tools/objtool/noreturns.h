@@ -6,6 +6,7 @@
  *
  * Yes, this is unfortunate.  A better solution is in the works.
  */
+NORETURN(__efistub_efi_enter_kernel)
 NORETURN(__fortify_panic)
 NORETURN(__ia32_sys_exit)
 NORETURN(__ia32_sys_exit_group)

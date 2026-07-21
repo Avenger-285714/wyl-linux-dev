@@ -150,7 +150,38 @@ KBUILD_RUSTFLAGS_KERNEL		+= -Crelocation-model=pie
 LDFLAGS_vmlinux			+= -static -pie --no-dynamic-linker -z notext $(call ld-option, --apply-dynamic-relocs)
 endif
 
+#
+# KLP_REBUILD is a contract variable between scripts/livepatch/klp-build
+# (which passes it on the make command line) and arch/loongarch/Makefile
+# (which uses it to override code-generation flags during the klp-build
+# internal rebuild).  It is never set during a normal kernel build.
+#
+ifdef KLP_REBUILD
+KBUILD_CFLAGS_KERNEL		+= -fPIC
+KBUILD_CFLAGS_MODULE		+= -fPIC
+KBUILD_CFLAGS_KERNEL		+= $(call cc-option,-mno-direct-extern-access)
+KBUILD_CFLAGS_MODULE		+= $(call cc-option,-mno-direct-extern-access)
+KBUILD_CFLAGS_KERNEL		+= $(call cc-option,-fno-direct-access-external-data)
+KBUILD_CFLAGS_MODULE		+= $(call cc-option,-fno-direct-access-external-data)
+KBUILD_RUSTFLAGS_KERNEL	+= -Crelocation-model=pic
+KBUILD_RUSTFLAGS_MODULE	+= -Crelocation-model=pic
+KBUILD_RUSTFLAGS_KERNEL	+= -Zdirect-access-external-data=no
+KBUILD_RUSTFLAGS_MODULE	+= -Zdirect-access-external-data=no
+endif
+
 cflags-y += $(call cc-option, -mno-check-zero-division -fno-isolate-erroneous-paths-dereference)
+
+#
+# LoongArch objtool support is still maturing: GCC generates unreachable
+# code after some noreturn-style functions (machine_restart with while(true)
+# idle loops, machine_kexec with kexec_reboot, etc.) that objtool flags
+# as "unreachable instruction".  Suppress these warnings until the
+# annotations are upstream.
+#
+ifdef CONFIG_OBJTOOL
+objtool-args-y += --no-unreachable
+export objtool-args-y
+endif
 
 ifndef CONFIG_KASAN
 cflags-y += -fno-builtin-memcpy -fno-builtin-memmove -fno-builtin-memset

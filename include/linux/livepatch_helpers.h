@@ -53,6 +53,28 @@
 #define KLP_SYSCALL_DEFINE5(name, ...) KLP_SYSCALL_DEFINEx(5, _##name, __VA_ARGS__)
 #define KLP_SYSCALL_DEFINE6(name, ...) KLP_SYSCALL_DEFINEx(6, _##name, __VA_ARGS__)
 
+#ifdef CONFIG_LOONGARCH
+#define KLP_SYSCALL_DEFINE0(sname)						\
+	__LOONGARCH_SYS_STUB0(sname)						\
+	static inline long __klp_do_sys##sname(void);				\
+	asmlinkage long __loongarch_sys_##sname(const struct pt_regs *__unused)\
+	{									\
+		return __klp_do_sys##sname();					\
+	}									\
+	static inline long __klp_do_sys##sname(void)
+#elif defined(CONFIG_X86_64)
+#define KLP_SYSCALL_DEFINE0(sname)					\
+	asmlinkage long sys_##sname(void)				\
+		__attribute__((alias(__stringify(__se_sys##sname))));	\
+	ALLOW_ERROR_INJECTION(sys_##sname, ERRNO);			\
+	static inline long __klp_do_sys##sname(void);			\
+	asmlinkage long __se_sys##sname(void)				\
+	{								\
+		return __klp_do_sys##sname();				\
+	}								\
+	static inline long __klp_do_sys##sname(void)
+#endif /* CONFIG_X86_64 || CONFIG_LOONGARCH */
+
 #define KLP_SYSCALL_DEFINEx(x, sname, ...)				\
 	__KLP_SYSCALL_DEFINEx(x, sname, __VA_ARGS__)
 
@@ -72,6 +94,19 @@
 	}								\
 	static inline long __klp_do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
 
-#endif
+#elif defined(CONFIG_LOONGARCH)
+#define __KLP_SYSCALL_DEFINEx(x, name, ...)					\
+	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__));		\
+	static inline long __klp_do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__));\
+	__LOONGARCH_SYS_STUBx(x, name, __VA_ARGS__)				\
+	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__))		\
+	{									\
+		long ret = __klp_do_sys##name(__MAP(x,__SC_CAST,__VA_ARGS__));\
+		__MAP(x,__SC_TEST,__VA_ARGS__);					\
+		__PROTECT(x, ret,__MAP(x,__SC_ARGS,__VA_ARGS__));		\
+		return ret;							\
+	}									\
+	static inline long __klp_do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
+#endif /* CONFIG_X86_64 || CONFIG_LOONGARCH */
 
 #endif /* _LINUX_LIVEPATCH_HELPERS_H */

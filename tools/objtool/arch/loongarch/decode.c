@@ -34,9 +34,91 @@ s64 arch_insn_adjusted_addend(struct instruction *insn, struct reloc *reloc)
 	return reloc_addend(reloc);
 }
 
+u64 arch_adjusted_addend(struct reloc *reloc)
+{
+	return reloc_addend(reloc);
+}
+
+/*
+ * A cross-section difference like the \"key - .\" field of a __jump_table
+ * entry may come out as a paired R_LARCH_ADD plus R_LARCH_SUB relocation
+ * at the same offset: clang's integrated assembler does this when the
+ * symbol is not defined in the same translation unit (GAS, and clang for
+ * locally-defined symbols, emit a single PCREL instead).  objtool allows
+ * only one relocation per offset, so the pair breaks cloning.
+ *
+ * When the SUB half points at the reloc's own position (\"sym - .\"), the
+ * pair means the same as a single PC-relative relocation, which the
+ * module loader also supports: rewrite the ADD half to R_LARCH_*_PCREL
+ * and tell the caller to skip the SUB half.
+ *
+ * Return 1 to skip the reloc, 0 to proceed, -1 on error.
+ */
+int arch_normalize_paired_reloc(struct elf *elf, struct reloc *reloc)
+{
+	struct section *rsec = reloc->sec;
+	unsigned int sub_type, pcrel_type;
+	struct reloc *sub, *add;
+
+	switch (reloc_type(reloc)) {
+	case R_LARCH_ADD32:
+		sub_type = R_LARCH_SUB32;
+		pcrel_type = R_LARCH_32_PCREL;
+		break;
+	case R_LARCH_ADD64:
+		sub_type = R_LARCH_SUB64;
+		pcrel_type = R_LARCH_64_PCREL;
+		break;
+	case R_LARCH_SUB32:
+	case R_LARCH_SUB64:
+		/*
+		 * Skip only if the paired ADD (the preceding reloc) has
+		 * been rewritten to PCREL; otherwise leave the pair
+		 * intact so a failed conversion stays loud.
+		 */
+		add = reloc_idx(reloc) ? reloc - 1 : NULL;
+		if (add && reloc_offset(add) == reloc_offset(reloc) &&
+		    (reloc_type(add) == R_LARCH_32_PCREL ||
+		     reloc_type(add) == R_LARCH_64_PCREL))
+			return 1;
+		return 0;
+	default:
+		return 0;
+	}
+
+	/* The paired SUB reloc immediately follows the ADD */
+	sub = rsec_next_reloc(rsec, reloc);
+	if (!sub || reloc_offset(sub) != reloc_offset(reloc) ||
+	    reloc_type(sub) != sub_type)
+		return 0;
+
+	/* Only a \"sym - .\" difference is PC-relative */
+	if (sub->sym->sec != rsec->base ||
+	    sub->sym->offset + reloc_addend(sub) != reloc_offset(sub))
+		return 0;
+
+	set_reloc_type(elf, reloc, pcrel_type);
+	return 0;
+}
+
 bool arch_pc_relative_reloc(struct reloc *reloc)
 {
 	return false;
+}
+
+bool arch_absolute_reloc(struct elf *elf, struct reloc *reloc)
+{
+	switch (reloc_type(reloc)) {
+	case R_LARCH_32:
+	case R_LARCH_64:
+	case R_LARCH_ABS_HI20:
+	case R_LARCH_ABS_LO12:
+	case R_LARCH_ABS64_LO20:
+	case R_LARCH_ABS64_HI12:
+		return true;
+	default:
+		return false;
+	}
 }
 
 bool arch_callee_saved_reg(unsigned char reg)
@@ -360,6 +442,77 @@ int arch_decode_instruction(struct objtool_file *file, const struct section *sec
 	}
 
 	return 0;
+}
+
+size_t arch_jump_opcode_bytes(struct objtool_file *file, struct instruction *insn,
+			      unsigned char *buf)
+{
+	union loongarch_instruction inst;
+	u32 opcode;
+	u32 mask;
+
+	/*
+	 * LoongArch branch immediates are not x86-style trailing byte fields.
+	 * Keep the opcode and operand fields which define the branch semantics,
+	 * and clear only the PC-relative immediate bits:
+	 *
+	 * format   branch opcodes              cleared bits          kept bits
+	 * reg0i26  b, bl                       [25:0]                opcode
+	 * reg1i21  beqz, bnez, bceqz/bcnez     [25:10], [4:0]        opcode, rj
+	 * reg2i16  jirl, beq, bne, blt, bge,   [25:10]               opcode,
+	 *          bltu, bgeu                                        rd, rj
+	 *
+	 * bceqz and bcnez share opcode 0x12.  Their condition selector lives in
+	 * reg1i21.rj bits, so preserve the whole rj field.
+	 *
+	 * When adding new branch/call/jump opcode decode support in
+	 * arch_decode_instruction(), you MUST also add the corresponding
+	 * mask case here.  Otherwise KLP checksums will include PC-relative
+	 * displacement bits and become unstable across recompilation.
+	 * The WARN_FUNC fallback fires at runtime but is not a substitute
+	 * for correct masking.
+	 */
+	memcpy(&inst, insn->sec->data->d_buf + insn->offset, sizeof(inst));
+
+	/*
+	 * Opcode is always in bits[31:26] across all LoongArch instruction
+	 * formats.  Extract it once and dispatch on the numeric value so
+	 * that the full set of handled branch opcodes is visible in one
+	 * place.
+	 */
+	opcode = inst.word >> 26;
+
+	switch (opcode) {
+	case b_op:		/* 0x14: b   (reg0i26) */
+	case bl_op:		/* 0x15: bl  (reg0i26) */
+		mask = 0xfc000000;
+		break;
+
+	case beqz_op:		/* 0x10: beqz              (reg1i21) */
+	case bnez_op:		/* 0x11: bnez              (reg1i21) */
+	case bceqz_op:		/* 0x12: bceqz / bcnez     (reg1i21) */
+		mask = 0xfc0003e0;
+		break;
+
+	case jirl_op:		/* 0x13: jirl              (reg2i16) */
+	case beq_op:		/* 0x16: beq               (reg2i16) */
+	case bne_op:		/* 0x17: bne               (reg2i16) */
+	case blt_op:		/* 0x18: blt               (reg2i16) */
+	case bge_op:		/* 0x19: bge               (reg2i16) */
+	case bltu_op:		/* 0x1a: bltu              (reg2i16) */
+	case bgeu_op:		/* 0x1b: bgeu              (reg2i16) */
+		mask = 0xfc0003ff;
+		break;
+
+	default:
+		WARN_FUNC(insn->sec, insn->offset, "unexpected jump/call instruction");
+		mask = ~0U;
+		break;
+	}
+
+	inst.word &= mask;
+	memcpy(buf, &inst, LOONGARCH_INSN_SIZE);
+	return LOONGARCH_INSN_SIZE;
 }
 
 const char *arch_nop_insn(int len)
