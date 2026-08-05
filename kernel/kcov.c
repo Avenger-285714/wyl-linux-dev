@@ -1119,10 +1119,13 @@ static void __init selftest(void)
 	 * potentially traced functions in this region.
 	 */
 	start = jiffies;
+	/* Prevent preemption while tracing is armed with no area set. */
+	preempt_disable();
 	WRITE_ONCE(current->kcov_mode, KCOV_MODE_TRACE_PC);
 	while ((jiffies - start) * MSEC_PER_SEC / HZ < 300)
 		;
 	WRITE_ONCE(current->kcov_mode, 0);
+	preempt_enable();
 	pr_err("done running self test\n");
 }
 #endif
