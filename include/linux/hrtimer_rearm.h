@@ -3,9 +3,23 @@
 #define _LINUX_HRTIMER_REARM_H
 
 #ifdef CONFIG_HRTIMER_REARM_DEFERRED
+#include <linux/preempt.h>
 #include <linux/thread_info.h>
 
 void __hrtimer_rearm_deferred(void);
+
+/*
+ * __hrtimer_rearm_deferred() completes work deferred from a hardirq, so
+ * always run it in hardirq context: several invocation points run with
+ * the hardirq count already dropped, where in_task() would wrongly
+ * report task context (e.g. to KCOV).
+ */
+static __always_inline void hrtimer_rearm_deferred_hardirq(void)
+{
+	preempt_count_add(HARDIRQ_OFFSET);
+	__hrtimer_rearm_deferred();
+	preempt_count_sub(HARDIRQ_OFFSET);
+}
 
 /*
  * This is purely CPU local, so check the TIF bit first to avoid the overhead of
@@ -38,7 +52,7 @@ hrtimer_rearm_deferred_user_irq(unsigned long *tif_work, const unsigned long tif
 	 */
 	if (unlikely((*tif_work & TIF_REARM_MASK) == _TIF_HRTIMER_REARM)) {
 		clear_thread_flag(TIF_HRTIMER_REARM);
-		__hrtimer_rearm_deferred();
+		hrtimer_rearm_deferred_hardirq();
 		/* Don't go into the loop if HRTIMER_REARM was the only flag */
 		*tif_work &= ~TIF_HRTIMER_REARM;
 		return !*tif_work;
@@ -50,7 +64,7 @@ hrtimer_rearm_deferred_user_irq(unsigned long *tif_work, const unsigned long tif
 static __always_inline void hrtimer_rearm_deferred_tif(unsigned long tif_work)
 {
 	if (hrtimer_test_and_clear_rearm_deferred_tif(tif_work))
-		__hrtimer_rearm_deferred();
+		hrtimer_rearm_deferred_hardirq();
 }
 
 /*
@@ -73,6 +87,7 @@ static __always_inline bool hrtimer_test_and_clear_rearm_deferred(void)
 
 #else  /* CONFIG_HRTIMER_REARM_DEFERRED */
 static __always_inline void __hrtimer_rearm_deferred(void) { }
+static __always_inline void hrtimer_rearm_deferred_hardirq(void) { }
 static __always_inline void hrtimer_rearm_deferred(void) { }
 static __always_inline void hrtimer_rearm_deferred_tif(unsigned long tif_work) { }
 static __always_inline bool
