@@ -783,8 +783,15 @@ int i2c_dw_handle_tx_abort(struct dw_i2c_dev *dev)
 		return -EREMOTEIO;
 	}
 
-	for_each_set_bit(i, &abort_source, ARRAY_SIZE(abort_sources))
-		dev_err(dev->dev, "%s: %s\n", __func__, abort_sources[i]);
+	for_each_set_bit(i, &abort_source, ARRAY_SIZE(abort_sources)) {
+		/* Avoid arbitration loss noise. */
+		if (i == ARB_LOST)
+			dev_dbg(dev->dev,
+				"%s: %s\n", __func__, abort_sources[i]);
+		else
+			dev_err(dev->dev,
+				"%s: %s\n", __func__, abort_sources[i]);
+	}
 
 	if (abort_source & DW_IC_TX_ARB_LOST)
 		return -EAGAIN;
